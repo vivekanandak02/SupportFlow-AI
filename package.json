@@ -1,0 +1,23 @@
+{
+  "name": "supportflow-ai",
+  "version": "1.0.0",
+  "description": "MERN Support System with AI Ticket Classification & Routing",
+  "scripts": {
+    "server": "node server/server.js",
+    "client": "npm.cmd --prefix client run dev",
+    "start": "node server/server.js"
+  },
+  "keywords": [
+    "mern",
+    "support-tickets",
+    "nlp",
+    "ai-classification",
+    "express",
+    "react",
+    "mongodb"
+  ],
+  "dependencies": {
+    "docx": "^9.13.0",
+    "puppeteer-core": "^25.15.0"
+  }
+}

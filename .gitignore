@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Production build artifacts
+dist/
+client/dist/
+build/
+
+# Environment configurations
+.env
+server/.env
+server/.env.local
+
+# Logs and runtime caches
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Editor and OS files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Report generation utilities & generated docx files (Project code only on repo)
+*.docx
+report_assets/
+screenshots/
+check_pages.ps1
+capture_screenshots.js
+generate_report.js
+build_full_document.js
+report_helpers.js
+section_*.js
+test_*.docx
+test_*.png
+screen_*.png
