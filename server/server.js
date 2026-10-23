@@ -1,10 +1,8 @@
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
-const dotenv = require('dotenv');
 const { connectDB, getStatus } = require('./config/db');
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
