@@ -35,12 +35,24 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (email, password) => {
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
-    const data = await res.json();
+    let res;
+    try {
+      res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+    } catch (networkErr) {
+      throw new Error('Backend server is offline. Please start it on port 5000 using: node server/server.js');
+    }
+
+    let data;
+    try {
+      data = await res.json();
+    } catch (jsonErr) {
+      throw new Error('Backend server is offline or unreachable on port 5000. Please start the backend server.');
+    }
+
     if (!res.ok) {
       throw new Error(data.message || 'Login failed');
     }
@@ -52,12 +64,24 @@ export const AuthProvider = ({ children }) => {
   };
 
   const register = async (name, email, password, role = 'employee') => {
-    const res = await fetch('/api/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password, role })
-    });
-    const data = await res.json();
+    let res;
+    try {
+      res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password, role })
+      });
+    } catch (networkErr) {
+      throw new Error('Backend server is offline. Please start it on port 5000 using: node server/server.js');
+    }
+
+    let data;
+    try {
+      data = await res.json();
+    } catch (jsonErr) {
+      throw new Error('Backend server is offline or unreachable on port 5000. Please start the backend server.');
+    }
+
     if (!res.ok) {
       throw new Error(data.message || 'Registration failed');
     }
@@ -69,13 +93,9 @@ export const AuthProvider = ({ children }) => {
   };
 
   const loginAsDemo = async (role = 'admin') => {
-    try {
-      const email = role === 'admin' ? 'admin@supportflow.ai' : 'user@supportflow.ai';
-      const password = role === 'admin' ? 'admin123' : 'user123';
-      return await login(email, password);
-    } catch (err) {
-      console.warn('Demo login error:', err);
-    }
+    const email = role === 'admin' ? 'admin@supportflow.ai' : 'user@supportflow.ai';
+    const password = role === 'admin' ? 'admin123' : 'user123';
+    return await login(email, password);
   };
 
   const logout = () => {
