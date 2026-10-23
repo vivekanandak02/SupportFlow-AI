@@ -37,7 +37,7 @@ export default function LoginPage({ onSuccess }) {
       await loginAsDemo(demoRole);
       if (onSuccess) onSuccess();
     } catch (err) {
-      setError('Demo login failed');
+      setError(err.message || 'Demo login failed');
     } finally {
       setSubmitting(false);
     }
