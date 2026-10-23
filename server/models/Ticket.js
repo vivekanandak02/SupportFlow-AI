@@ -8,6 +8,9 @@ const commentSchema = new mongoose.Schema({
 });
 
 const ticketSchema = new mongoose.Schema({
+  _id: {
+    type: String
+  },
   ticketNumber: {
     type: String,
     required: true,
