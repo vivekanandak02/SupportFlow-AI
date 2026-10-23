@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const dotenv = require('dotenv');
-const { connectDB } = require('./config/db');
+const { connectDB, getStatus } = require('./config/db');
 
 dotenv.config();
 
@@ -26,11 +26,17 @@ app.use('/api/analytics', require('./routes/analyticsRoutes'));
 
 // Health check
 app.get('/api/health', (req, res) => {
+  const isMongo = getStatus();
   res.json({
     status: 'online',
     timestamp: new Date().toISOString(),
     service: 'SupportFlow AI MERN API',
-    version: '1.0.0'
+    version: '1.0.0',
+    database: {
+      type: isMongo ? 'MongoDB Atlas / Local MongoDB' : 'Built-in Local Persistent Datastore',
+      connected: isMongo,
+      mode: isMongo ? 'mongodb' : 'fallback_persistent'
+    }
   });
 });
 
