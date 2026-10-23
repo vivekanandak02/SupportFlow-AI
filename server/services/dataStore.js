@@ -42,7 +42,7 @@ async function findUserByEmail(email) {
       const u = await User.findOne({ email: email.toLowerCase() });
       if (u) return u.toObject();
     } catch (e) {
-      // fallback
+      console.warn('MongoDB findUserByEmail error, checking fallback:', e.message);
     }
   }
   const store = loadStore();
@@ -61,14 +61,6 @@ async function findUserById(id) {
 }
 
 async function createUser({ name, email, password, role = 'employee', department = 'General' }) {
-  if (getStatus()) {
-    try {
-      const u = new User({ name, email, password, role, department });
-      const saved = await u.save();
-      return saved.toObject();
-    } catch (e) {}
-  }
-  const store = loadStore();
   const newUser = {
     _id: 'user_' + Date.now(),
     name,
@@ -79,6 +71,17 @@ async function createUser({ name, email, password, role = 'employee', department
     avatar: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80`,
     createdAt: new Date().toISOString()
   };
+
+  if (getStatus()) {
+    try {
+      const u = new User(newUser);
+      const saved = await u.save();
+      return saved.toObject();
+    } catch (e) {
+      console.warn('MongoDB createUser error, saving to local store:', e.message);
+    }
+  }
+  const store = loadStore();
   store.users.push(newUser);
   saveStore(store);
   return newUser;
@@ -133,7 +136,9 @@ async function createTicket(ticketData) {
     try {
       const t = new Ticket(newTicket);
       await t.save();
-    } catch (e) {}
+    } catch (e) {
+      console.warn('MongoDB createTicket error:', e.message);
+    }
   }
 
   store.tickets.unshift(newTicket);
@@ -142,10 +147,42 @@ async function createTicket(ticketData) {
 }
 
 async function getTickets({ category, priority, status, search, userId, role }) {
+  if (getStatus()) {
+    try {
+      let query = {};
+      if (role === 'employee' && userId) {
+        query['createdBy._id'] = userId;
+      }
+      if (category && category !== 'All') {
+        query.category = { $regex: new RegExp(`^${category}$`, 'i') };
+      }
+      if (priority && priority !== 'All') {
+        query.priority = { $regex: new RegExp(`^${priority}$`, 'i') };
+      }
+      if (status && status !== 'All') {
+        query.status = { $regex: new RegExp(`^${status}$`, 'i') };
+      }
+      if (search) {
+        query.$or = [
+          { title: { $regex: search, $options: 'i' } },
+          { ticketNumber: { $regex: search, $options: 'i' } },
+          { description: { $regex: search, $options: 'i' } },
+          { assignedTeam: { $regex: search, $options: 'i' } },
+          { 'createdBy.name': { $regex: search, $options: 'i' } }
+        ];
+      }
+      const mongoList = await Ticket.find(query).sort({ createdAt: -1 });
+      if (mongoList && mongoList.length > 0) {
+        return mongoList.map(t => t.toObject());
+      }
+    } catch (e) {
+      console.warn('MongoDB getTickets error, checking fallback store:', e.message);
+    }
+  }
+
   const store = loadStore();
   let list = [...store.tickets];
 
-  // If user is employee and not admin, only show their own tickets
   if (role === 'employee' && userId) {
     list = list.filter(t => t.createdBy && t.createdBy._id === userId);
   }
@@ -173,12 +210,17 @@ async function getTickets({ category, priority, status, search, userId, role }) 
     );
   }
 
-  // Sort: Urgent & High first or newest first
   list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   return list;
 }
 
 async function getTicketById(id) {
+  if (getStatus()) {
+    try {
+      const t = await Ticket.findOne({ $or: [{ _id: id }, { ticketNumber: id }] });
+      if (t) return t.toObject();
+    } catch (e) {}
+  }
   const store = loadStore();
   return store.tickets.find(t => t._id === id || t.ticketNumber === id);
 }
@@ -186,31 +228,42 @@ async function getTicketById(id) {
 async function updateTicket(id, updates) {
   const store = loadStore();
   const index = store.tickets.findIndex(t => t._id === id || t.ticketNumber === id);
-  if (index === -1) return null;
 
-  const current = store.tickets[index];
-  const updated = {
-    ...current,
+  const updatedPayload = {
     ...updates,
     updatedAt: new Date().toISOString()
   };
 
-  store.tickets[index] = updated;
-  saveStore(store);
+  let updatedObj = null;
+
+  if (index !== -1) {
+    store.tickets[index] = {
+      ...store.tickets[index],
+      ...updatedPayload
+    };
+    saveStore(store);
+    updatedObj = store.tickets[index];
+  }
 
   if (getStatus()) {
     try {
-      await Ticket.findByIdAndUpdate(current._id, updated);
-    } catch (e) {}
+      const t = await Ticket.findOneAndUpdate(
+        { $or: [{ _id: id }, { ticketNumber: id }] },
+        { $set: updatedPayload },
+        { new: true }
+      );
+      if (t) updatedObj = t.toObject();
+    } catch (e) {
+      console.warn('MongoDB updateTicket error:', e.message);
+    }
   }
 
-  return updated;
+  return updatedObj;
 }
 
 async function addTicketComment(id, { author, text, isAi = false }) {
   const store = loadStore();
   const index = store.tickets.findIndex(t => t._id === id || t.ticketNumber === id);
-  if (index === -1) return null;
 
   const newComment = {
     _id: 'c_' + Date.now(),
@@ -220,29 +273,71 @@ async function addTicketComment(id, { author, text, isAi = false }) {
     createdAt: new Date().toISOString()
   };
 
-  if (!store.tickets[index].comments) {
-    store.tickets[index].comments = [];
-  }
-  store.tickets[index].comments.push(newComment);
-  store.tickets[index].updatedAt = new Date().toISOString();
+  let result = null;
 
-  saveStore(store);
-  return store.tickets[index];
+  if (index !== -1) {
+    if (!store.tickets[index].comments) {
+      store.tickets[index].comments = [];
+    }
+    store.tickets[index].comments.push(newComment);
+    store.tickets[index].updatedAt = new Date().toISOString();
+    saveStore(store);
+    result = store.tickets[index];
+  }
+
+  if (getStatus()) {
+    try {
+      const t = await Ticket.findOneAndUpdate(
+        { $or: [{ _id: id }, { ticketNumber: id }] },
+        { 
+          $push: { comments: newComment },
+          $set: { updatedAt: new Date().toISOString() }
+        },
+        { new: true }
+      );
+      if (t) result = t.toObject();
+    } catch (e) {
+      console.warn('MongoDB addTicketComment error:', e.message);
+    }
+  }
+
+  return result;
 }
 
 async function deleteTicket(id) {
   const store = loadStore();
   const index = store.tickets.findIndex(t => t._id === id || t.ticketNumber === id);
-  if (index === -1) return false;
+  if (index !== -1) {
+    store.tickets.splice(index, 1);
+    saveStore(store);
+  }
 
-  store.tickets.splice(index, 1);
-  saveStore(store);
+  if (getStatus()) {
+    try {
+      await Ticket.deleteOne({ $or: [{ _id: id }, { ticketNumber: id }] });
+    } catch (e) {
+      console.warn('MongoDB deleteTicket error:', e.message);
+    }
+  }
+
   return true;
 }
 
 async function getAnalyticsStats() {
-  const store = loadStore();
-  const tickets = store.tickets;
+  let tickets = [];
+  if (getStatus()) {
+    try {
+      const list = await Ticket.find().lean();
+      if (list && list.length > 0) {
+        tickets = list;
+      }
+    } catch (e) {}
+  }
+
+  if (!tickets || tickets.length === 0) {
+    const store = loadStore();
+    tickets = store.tickets;
+  }
 
   const total = tickets.length;
   const open = tickets.filter(t => t.status === 'open').length;
